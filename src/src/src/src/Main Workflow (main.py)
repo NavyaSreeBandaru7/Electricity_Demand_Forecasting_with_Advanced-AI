@@ -1,0 +1,39 @@
+import pandas as pd
+from src.data_processing import load_and_preprocess, engineer_features, scale_data
+from src.modeling import train_holt_winters, forecast_future, evaluate_model
+from src.forecasting_agent import ForecastingAgent
+from src.nlp_report_generator import ReportGenerator
+
+def main():
+    # Data pipeline
+    raw_path = "data/raw/household_power_consumption.txt"
+    df = load_and_preprocess(raw_path)
+    df = engineer_features(df)
+    
+    # Train/Test split
+    train = df['Global_active_power']['2010':'2010-09-30']
+    test = df['Global_active_power']['2010-10-01':'2010-10-07']
+    
+    # Autonomous modeling
+    agent = ForecastingAgent({'seasonal_periods': 24})
+    best_params = agent.optimize_hyperparameters(train)
+    model = train_holt_winters(train, **best_params)
+    
+    # Forecasting
+    forecast = forecast_future(model, steps=168)
+    metrics = evaluate_model(test, forecast[:len(test)])
+    
+    # GenAI Reporting
+    report_gen = ReportGenerator()
+    report = report_gen.generate_forecast_report(
+        forecast.reset_index(), 
+        metrics
+    )
+    
+    # Save outputs
+    forecast.to_csv("outputs/forecasts/next_7_days_forecast.csv")
+    with open("outputs/reports/forecast_summary.md", "w") as f:
+        f.write(report)
+    
+if __name__ == "__main__":
+    main()
